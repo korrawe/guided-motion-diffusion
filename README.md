@@ -4,7 +4,7 @@
 
 The official PyTorch implementation of the paper [**"GMD: Controllable Human Motion Synthesis via Guided Diffusion Models"**](https://arxiv.org/abs/2305.12577).
 
-Please visit our [**webpage**](https://guytevet.github.io/mdm-page/) for more details.
+Visit our [**project page**](https://korrawe.github.io/gmd-project/) for more details.
 
 ![teaser](./assets/teaser.jpg)
 
