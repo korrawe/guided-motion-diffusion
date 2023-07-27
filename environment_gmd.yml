@@ -1,0 +1,32 @@
+name: gmd
+channels:
+  - pytorch
+  - nvidia
+  - anaconda
+  - defaults
+dependencies:
+  - pip
+  - ca-certificates
+  - gdown
+  - matplotlib=3.1.3
+  - numpy=1.21.5
+  - pillow=9.2.0
+  - python=3.7.13
+  - pytorch=1.13.1
+  - pytorch-cuda=11.6
+  - scikit-learn=1.0.2
+  - scipy=1.7.3
+  - six
+  - spacy=3.3.1
+  - torchaudio
+  - torchvision
+  - tqdm
+  - seaborn
+  - pip:
+    - chumpy==0.70
+    - smplx==0.1.28
+    - blobfile
+    - PyYaml
+    - tensorboard
+    - einops
+prefix: /disk2/guytevet/anaconda3/envs/mdm-venv
