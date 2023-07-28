@@ -17,8 +17,8 @@ from configs import card
 
 def main():
     ### Release version ###
-    ## Motion model
-    args = train_args(base_cls=card.motion_abs_proj10_unet_adagn_xl)
+    ## Trajectory model
+    args = train_args(base_cls=card.traj_unet_adagn_swx)
 
     pprint(args.__dict__)
     fixseed(args.seed)

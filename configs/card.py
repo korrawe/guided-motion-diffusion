@@ -104,7 +104,6 @@ class motion_abs_unet_adagn_xl_loss10(
 # UNET XL + PROJ
 ###########################
 
-
 @dataclass
 class motion_abs_proj1_unet_adagn_xl(
         data.humanml_motion_proj1,
@@ -136,86 +135,9 @@ class motion_abs_proj10_unet_adagn_xl(
 ):
     save_dir: str = 'save/unet_adazero_xl_x0_abs_proj10_fp16_clipwd_224'
 
-
-###########################
-# UNET XL - DROP REDUNDANT
-###########################
-@dataclass
-class motion_abs_unet_adagn_xl_drop_redundant(
-        data.humanml_motion_abs,
-        model.motion_unet_adagn_xl,
-):
-    save_dir: str = 'save/unet_adazero_xl_x0_abs_224_drop_redundant'
-    drop_redundant: bool = True
-    train_keypoint_mask: str = 'no' # 'keypoints'
-
-###########################
-# UNET XL + CFG KEYPOINT
-###########################
-@dataclass
-class motion_abs_unet_adagn_xl_kps(
-        data.humanml_motion_abs,
-        model.motion_unet_adagn_xl,
-):
-    save_dir: str = 'save/unet_adazero_xl_x0_abs_fp16_clipwd_224_kps_mi3' # _long_fix' # all'
-#     resume_checkpoint: str = 'save/unet_adazero_xl_x0_abs_fp16_clipwd_224_kps_long_fix_15/model001700000.pt'
-    train_keypoint_mask: str = 'keypoints'
-
-###########################
-# UNET XL + CFG KEYPOINT - DROP REDUNDANT
-###########################
-@dataclass
-class motion_abs_unet_adagn_xl_kps_drop_redundant(
-        data.humanml_motion_abs,
-        model.motion_unet_adagn_xl,
-):
-    save_dir: str = 'save/unet_adazero_xl_x0_abs_224_kps_drop_redundant_seed11' # all'
-    drop_redundant: bool = True
-    train_keypoint_mask: str = 'keypoints'
-    seed: int = 11
-
-
-###########################
-# UNET XL + CFG KEY *POSE*
-###########################
-@dataclass
-class motion_abs_unet_adagn_xl_pose(
-        data.humanml_motion_abs,
-        model.motion_unet_adagn_xl,
-):
-    save_dir: str = 'save/unet_adazero_xl_x0_abs_pose'
-    train_keypoint_mask: str = 'keyposes'
-
-
-###########################
-# UNET XL + CFG KEY *POSE* - DROP REDUNDANT
-###########################
-@dataclass
-class motion_abs_unet_adagn_xl_pose_drop_redundant(
-        data.humanml_motion_abs,
-        model.motion_unet_adagn_xl,
-):
-    save_dir: str = 'save/unet_adazero_xl_x0_abs_pose_drop_redundant'
-    train_keypoint_mask: str = 'keyposes'
-    drop_redundant: bool = True
-
-
-###########################
-# UNET XL + PROJ + KEYPOINT
-###########################
-@dataclass
-class motion_abs_proj10_unet_adagn_xl_kps(
-        data.humanml_motion_proj10,
-        model.motion_unet_adagn_xl,
-):
-    save_dir: str = 'save/unet_adazero_xl_x0_abs_proj10_fp16_clipwd_224_kps'
-
-
 ###########################
 # TRAJ MODELS
 ###########################
-
-
 @dataclass
 class traj_unet_adagn_swx(
         data.humanml_traj,
@@ -230,47 +152,3 @@ class traj_unet_xxs(
         model.traj_unet_xxs,
 ):
     save_dir: str = 'save/traj_unet_xxs_eps_abs_fp16_clipwd_224'
-
-
-###########################
-# TRAJ MODELS + KEYPOINT
-###########################
-@dataclass
-class traj_unet_adagn_swx_kps(
-        data.humanml_traj,
-        model.traj_unet_adagn_swx,
-):
-    save_dir: str = 'save/traj_unet_adazero_swxs_eps_abs_fp16_clipwd_224_traj'      
-
-###########################
-# TRANSFORMER MODELS + CONDITION
-###########################
-@dataclass
-class motion_abs_mdm_cond(
-        data.humanml_motion_abs,
-        model.motion_mdm,
-):
-    save_dir: str = 'save/trans_abs_kps'
-    train_keypoint_mask: str = 'keypoints'
-
-###########################
-# TRANSFORMER MODELS + BETTER KPS CONDITION
-###########################
-@dataclass
-class motion_abs_mdm_cond_better(
-        data.humanml_motion_abs,
-        model.motion_mdm,
-):
-    save_dir: str = 'save/trans_abs_kps_better'
-    train_keypoint_mask: str = 'keypoints_better_cond'
-
-###########################
-# TRANSFORMER MODELS + *POSE* CONDITION
-###########################
-@dataclass
-class motion_abs_mdm_pose_cond(
-        data.humanml_motion_abs,
-        model.motion_mdm,
-):
-    save_dir: str = 'save/trans_abs_poses_naive'
-    train_keypoint_mask: str = 'keyposes'

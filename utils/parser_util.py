@@ -201,11 +201,6 @@ class TrainingOptions:
                                      metadata={"help": "Time weighted loss."})
     train_x0_as_eps: bool = field(default=False,
                                   metadata={"help": "Train x0 as eps."})
-    train_keypoint_mask: str = field(default='none',
-        metadata={
-            "help": "Keypoint mask. If not none, provide additional 2 dimentions for mask and gt keypoints.",
-            "choices": ['none', 'keypoints', 'keyposes', 'keypoints_better_cond', 'keyposes_better_cond']
-        })
 
 
 @dataclass

@@ -250,11 +250,16 @@ python -m visualize.render_mesh --input_path /path/to/mp4/stick/figure/file
 ## Training GMD
 
 GMD is trained on the **HumanML3D** dataset.
+### Trajectory Model
+```shell
+python -m train.train_trajectory
+```
+### Motion Model
 ```shell
 python -m train.train_gmd
 ```
 
-The same command is used for both the trajectory model and the motion model. You can select which model to train by changing the `train_args`. The training options can be found in `./configs/card.py`.
+Essentially, The same command is used for both the trajectory model and the motion model. You can select which model to train by changing the `train_args`. The training options can be found in `./configs/card.py`.
 
 * Use `--device` to define GPU id.
 * Add `--train_platform_type {ClearmlPlatform, TensorboardPlatform}` to track results with either [ClearML](https://clear.ml/) or [Tensorboard](https://www.tensorflow.org/tensorboard).
