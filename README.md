@@ -259,7 +259,7 @@ python -m train.train_trajectory
 python -m train.train_gmd
 ```
 
-Essentially, The same command is used for both the trajectory model and the motion model. You can select which model to train by changing the `train_args`. The training options can be found in `./configs/card.py`.
+Essentially, the same command is used for both the trajectory model and the motion model. You can select which model to train by changing the `train_args`. The training options can be found in `./configs/card.py`.
 
 * Use `--device` to define GPU id.
 * Add `--train_platform_type {ClearmlPlatform, TensorboardPlatform}` to track results with either [ClearML](https://clear.ml/) or [Tensorboard](https://www.tensorflow.org/tensorboard).
