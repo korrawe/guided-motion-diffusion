@@ -29,4 +29,3 @@ dependencies:
     - PyYaml
     - tensorboard
     - einops
-prefix: /disk2/guytevet/anaconda3/envs/mdm-venv
