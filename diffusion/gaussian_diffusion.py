@@ -400,36 +400,6 @@ class GaussianDiffusion:
             model_output, _ = model_output
 
         denoised_fn = None
-
-        # int(t[0]) > 0 and
-        if False and int(t[0]) > 0 and (
-                self.model_mean_type == ModelMeanType.START_X
-                and 'inpainting_mask' in model_kwargs['y'].keys()
-                and 'inpainted_motion' in model_kwargs['y'].keys()):
-
-            inpainting_mask, inpainted_motion = model_kwargs['y'][
-                'inpainting_mask'], model_kwargs['y']['inpainted_motion']
-            # assert self.model_mean_type == ModelMeanType.START_X, 'This feature supports only X_start pred for now!'
-            assert model_output.shape == inpainting_mask.shape == inpainted_motion.shape
-            if self.data_transform_fn is not None:  # "inv_transform_fn" in model_kwargs['y'].keys():
-                # print("...")
-                if True:  # ( not self._scale_timesteps(t) % 100 == 0 or int(t) == 0):
-                    # model_output shape [1, 263, 1, 120]
-                    # Project back to motion representation
-                    unprojected_x_start = self.data_inv_transform_fn(
-                        model_output.permute(0, 2, 3, 1))  # [1, 1, 120, 263])
-                    # Inpaint
-                    painted_model_output = (
-                        (unprojected_x_start *
-                         ~inpainting_mask.permute(0, 2, 3, 1)) +
-                        (inpainted_motion.permute(0, 2, 3, 1) *
-                         inpainting_mask.permute(0, 2, 3, 1)))
-                    # Do random projection again
-                    model_output = self.data_transform_fn(
-                        painted_model_output).permute(0, 3, 1, 2)
-            else:
-                model_output = (model_output * ~inpainting_mask) + (
-                    inpainted_motion * inpainting_mask)
                 
         if self.model_var_type in [
                 ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE
@@ -472,28 +442,18 @@ class GaussianDiffusion:
             # only applies to epsilon prediction
             # NOTE: it's now safe to always clip!
             if clip_denoised:
-                # print('clip_denoised', clip_denoised)
-                # return x.clamp(-1, 1)
                 if model_mean_type == ModelMeanType.START_X:
                     # there is no need to clip if the model predicts xstart
                     return x
                 else:
                     # TODO: whether to clip should be determined from the outside
                     if self.conf.abs_3d:
-                        # TODO: tailor to specific features
                         if self.conf.traj_only:
                             return x.clamp(-self.clip_range, self.clip_range)
                         else:
                             raise NotImplementedError()
-                            # x [bs, njoints, nfeat, nframes]
-                            # return x.clamp(-10, 10)
-                            x[:, :4].clamp_(-8, 8)
-                            x[:, 4:].clamp_(-3, 3)
-                            return x
                     else:
                         raise NotImplementedError()
-                        # relatieve features are in [-1, 1]
-                        return x.clamp(-3, 3)
             return x
 
         if self.model_mean_type == ModelMeanType.PREVIOUS_X:
@@ -563,27 +523,12 @@ class GaussianDiffusion:
 
         This uses the conditioning strategy from Sohl-Dickstein et al. (2015).
         """
-        # gradient = cond_fn(x, self._scale_timesteps(t), **model_kwargs)
-
-        # Test return update_xstart
-        if True:  # t < 40:
-            updated_xstart = cond_fn(p_mean_var["pred_xstart"],
-                                     self._scale_timesteps(t),
-                                     diffusion=self,
-                                     **model_kwargs)
-            new_mean, _, _ = self.q_posterior_mean_variance(
-                x_start=updated_xstart, x_t=x, t=t)
-        else:
-            #Original code
-            # NOTE: test if we can compute gradient based on x_start instead of previous x
-            gradient = cond_fn(p_mean_var["pred_xstart"],
-                               self._scale_timesteps(t), **model_kwargs)
-            new_mean = (p_mean_var["mean"].float() +
-                        p_mean_var["variance"] * gradient.float())
-        # Test stop conditioning
-        # if t < 400:
-        #     gradient *= 0.
-        # gradient = gradient * self.sqrt_recip_alphas_cumprod[t] # torch.autograd.grad(p_mean_var["pred_xstart"], x)[0]
+        updated_xstart = cond_fn(p_mean_var["pred_xstart"],
+                                    self._scale_timesteps(t),
+                                    diffusion=self,
+                                    **model_kwargs)
+        new_mean, _, _ = self.q_posterior_mean_variance(
+            x_start=updated_xstart, x_t=x, t=t)
 
         return new_mean
 
@@ -602,16 +547,14 @@ class GaussianDiffusion:
 
         This uses the conditioning strategy from Sohl-Dickstein et al. (2015).
         """
-        # gradient = cond_fn(x, t, p_mean_var, diffusion=self, **model_kwargs)
         gradient = cond_fn(x, t, p_mean_var, **model_kwargs)
-        if var_scale:  # or t[0] > 980:
+        if var_scale:
             new_mean = (p_mean_var["mean"].float() +
                         p_mean_var["variance"] * gradient.float())
         else:
             new_mean = p_mean_var["mean"].float() + gradient.float(
-            )  # * _extract_into_tensor(1 - self.alphas_cumprod, t, x.shape)
+            )
 
-        # print(p_mean_var["variance"] )
         return new_mean
 
     def condition_score(self, cond_fn, p_mean_var, x, t, model_kwargs=None):
@@ -625,14 +568,8 @@ class GaussianDiffusion:
         from Song et al (2020).
         """
         # NOTE: We modified this such that our cond_fn returns the desired pred_xstart directly
-        # alpha_bar = _extract_into_tensor(self.alphas_cumprod, t, x.shape)
 
-        # eps = self._predict_eps_from_xstart(x, t, p_mean_var["pred_xstart"])
-        # eps = eps - (1 - alpha_bar).sqrt() * cond_fn(
-        #     x, self._scale_timesteps(t), **model_kwargs
-        # )
         out = p_mean_var.copy()
-        # out["pred_xstart"] = self._predict_xstart_from_eps(x, t, eps)
         if int(t) <= 1000 and int(t) > 0:
             new_pred_xstart = cond_fn(p_mean_var["pred_xstart"],
                                       self._scale_timesteps(t), **model_kwargs)
@@ -725,9 +662,6 @@ class GaussianDiffusion:
                                               x,
                                               t,
                                               model_kwargs=model_kwargs)
-        # print('mean', out["mean"].shape, out["mean"])
-        # print('log_variance', out["log_variance"].shape, out["log_variance"])
-        # print('nonzero_mask', nonzero_mask.shape, nonzero_mask)
         sample = out["mean"] + nonzero_mask * th.exp(
             0.5 * out["log_variance"]) * noise
 
@@ -815,7 +749,7 @@ class GaussianDiffusion:
                     x,
                     t,
                     model_kwargs=
-                    model_kwargs,  #  var_scale=not model_kwargs['y']['traj_model']
+                    model_kwargs, 
                 )
         sample = out["mean"] + nonzero_mask * th.exp(
             0.5 * out["log_variance"]) * noise
@@ -978,12 +912,10 @@ class GaussianDiffusion:
                             combined_mean = model_mean_imputed
                         else:
                             raise NotImplementedError()
+                        # Combine inpainted sample with grad sample. Ratio is arbitrary
                         sample = combined_mean + nonzero_mask * th.exp(
                             0.5 * out["log_variance"]) * noise
 
-                        # Combine inpainted sample with grad sample. Ratio is arbitrary
-                        # sample_inpainted = model_mean_imputed + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
-                        # sample = (1 - impute_ratio) * sample + impute_ratio * sample_inpainted
                     elif impute_at == 'mu':
                         # NOTE: no good, imputing on x0 is better
                         noise = th.randn_like(sample)
@@ -1047,7 +979,6 @@ class GaussianDiffusion:
                         raise NotImplementedError()
                 else:
                     IMPUTE_AT_X0 = True
-                    # IMPUTE_AT_X0 = False
                     if 'impute_relative' in model_kwargs['y'] and model_kwargs['y']['impute_relative']:
                         # For relative model (including MDM), we need to impute at x_t and set x_0 to the target,
                         # because we use pred_x_start as output.
@@ -1055,9 +986,7 @@ class GaussianDiffusion:
 
                     # NOTE: All imputing methods assume the given motion is in the motion space (not scaled)
                     if IMPUTE_AT_X0:
-                        # NOTE: can it share the code with random projection?
                         impute_type = 'combine'
-
                         if impute_type == 'interpolate':
                             cur_xstart = out["pred_xstart"]
                             # Project back to motion representation
@@ -1084,9 +1013,6 @@ class GaussianDiffusion:
                             sample = combined_mean + nonzero_mask * th.exp(
                                 0.5 * out["log_variance"]) * noise
 
-                            # Combine inpainted sample with grad sample. Ratio is arbitrary
-                            # sample_inpainted = model_mean_imputed + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
-                            # sample = (1 - impute_ratio) * sample + impute_ratio * sample_inpainted
                         elif impute_type == 'combine':
                             cur_xstart = out["pred_xstart"]
                             # Project back to motion representation
@@ -1106,8 +1032,6 @@ class GaussianDiffusion:
                             # Need to compute x_{t-1} from x_start again
                             model_mean_imputed, _, _ = self.q_posterior_mean_variance(
                                 x_start=imputed_xstart, x_t=x, t=t)
-                            # Combine inpainted sample with grad sample. Ratio is arbitrary
-                            # Combine means should be better than combine samples with noises
 
                             mu = out["mean"]
                             unproj_mu = self.data_inv_transform_fn(
@@ -1145,13 +1069,10 @@ class GaussianDiffusion:
             out_list = [
                 990, 900, 800, 700, 600, 500, 400, 300, 200, 100, 10, 0
             ]
-            # out_list = [999, 998, 995, 990, 700, 500, 400, 300, 200, 100, 10, 0]
-            # out_list = [500, 400, 300, 200, 100, 10, 0]
             if int(t[0]) in out_list:
                 self.log_trajectory_fn(out["pred_xstart"].detach(),
                                        model_kwargs['y']['log_name'], out_list,
                                        t, model_kwargs['y']['log_id'])
-                # self.log_trajectory_fn(sample.detach(), model_kwargs['y']['log_name'], out_list, t, model_kwargs['y']['log_id'])
 
         # End inpainting
         return {"sample": sample, "pred_xstart": out["pred_xstart"].detach()}
@@ -1182,134 +1103,6 @@ class GaussianDiffusion:
 
         return out_mean_new
 
-    def p_sample_with_grad_repeat(
-        self,
-        model,
-        x,
-        t,
-        clip_denoised=True,
-        denoised_fn=None,
-        cond_fn=None,
-        model_kwargs=None,
-        const_noise=False,
-        previous_xstart=None,
-        repeat_step=1,
-    ):
-        """
-        Sample x_{t-1} from the model at the given timestep. 
-        Repeat the current step multiple times to get better conditioning
-
-        :param model: the model to sample from.
-        :param x: the current tensor at x_{t-1}.
-        :param t: the value of t, starting at 0 for the first diffusion step.
-        :param clip_denoised: if True, clip the x_start prediction to [-1, 1].
-        :param denoised_fn: if not None, a function which applies to the
-            x_start prediction before it is used to sample.
-        :param cond_fn: if not None, this is a gradient function that acts
-                        similarly to the model.
-        :param model_kwargs: if not None, a dict of extra keyword arguments to
-            pass to the model. This can be used for conditioning.
-        :return: a dict containing the following keys:
-                 - 'sample': a random sample from the model.
-                 - 'pred_xstart': a prediction of x_0.
-        """
-        repeat_step = 4
-        if int(t[0]) == 0: repeat_step = 1
-        for cur_step in range(repeat_step):
-
-            with th.enable_grad():
-                x = x.detach().requires_grad_()
-                out = self.p_mean_variance(
-                    model,
-                    x,
-                    t,
-                    clip_denoised=clip_denoised,
-                    denoised_fn=denoised_fn,
-                    model_kwargs=model_kwargs,
-                    previous_xstart=previous_xstart,
-                )
-                noise = th.randn_like(x)
-                nonzero_mask = (
-                    (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
-                )  # no noise when t == 0
-                if cond_fn is not None:
-                    # you need to supply with "unaltered x0" and calculate the gradient from it.
-                    # but you must only update mean in the "inpainting region" not outside (which will interfere with the imposing region).
-                    out["mean"] = self.condition_mean_with_grad(
-                        cond_fn, out, x, t, model_kwargs=model_kwargs)
-            sample = out["mean"] + nonzero_mask * th.exp(
-                0.5 * out["log_variance"]) * noise
-
-            # We do impainting here
-            # t[0] > 0 and
-            # print("t = ", int(t[0]))
-            if int(t[0]) > 0 and 'inpainting_mask' in model_kwargs['y'].keys(
-            ) and 'inpainted_motion' in model_kwargs['y'].keys():
-                inpainting_mask, inpainted_motion = model_kwargs['y'][
-                    'inpainting_mask'], model_kwargs['y']['inpainted_motion']
-                assert sample.shape == inpainting_mask.shape == inpainted_motion.shape
-
-                if self.model_mean_type == ModelMeanType.EPSILON:
-                    '''If the model predict x_start, the inpainting can be done inside p_mean_var()
-                    '''
-                    # assert self.model_mean_type == ModelMeanType.EPSILON, 'This feature supports only EPSILON pred for now.'
-                    t_minus_one = torch.where(t >= 1, t - 1, t)
-                    # Add noise to match t-1 level of noise
-                    noised_motion = self.q_sample(inpainted_motion,
-                                                  t_minus_one)
-                    sample = (sample * ~inpainting_mask) + (noised_motion *
-                                                            inpainting_mask)
-
-                    # Also update pred_xstart by replacing the imputed parts, this is not the same as what sample currently is.
-                    out["pred_xstart"] = (out["pred_xstart"] * ~inpainting_mask
-                                          ) + (inpainted_motion *
-                                               inpainting_mask)
-
-                elif False and self.model_mean_type == ModelMeanType.START_X:
-                    ''' If we do random projection the model predicts x_start, we can inpaint directly onto x_start
-                    '''
-                    raise NotImplementedError
-                    assert flag.USE_RANDOM_PROJECTION == False, "Random projection does not supports inpainting after sampling"
-                    if cur_step < repeat_step - 1:
-                        t_minus_one = t
-                    else:
-                        t_minus_one = torch.where(t >= 1, t - 1, t)
-                    # Add noise to match t-1 level of noise
-                    noised_motion = self.q_sample(inpainted_motion,
-                                                  t_minus_one)
-                    sample = (sample * ~inpainting_mask) + (noised_motion *
-                                                            inpainting_mask)
-                    # sample = (sample * ~inpainting_mask) + (inpainted_motion * inpainting_mask)
-                    # Also update pred_xstart by replacing the imputed parts, this is not the same as what sample currently is.
-                    out["pred_xstart"] = (out["pred_xstart"] * ~inpainting_mask
-                                          ) + (inpainted_motion *
-                                               inpainting_mask)
-
-                    # if self.data_transform_fn is not None:
-                    #     # Project back to motion representation
-                    #     unprojected_x_start =  self.data_inv_transform_fn(model_output.permute(0, 2, 3, 1))  # [1, 1, 120, 263])
-                    #     # Inpaint
-                    #     painted_model_output = ((unprojected_x_start * ~inpainting_mask.permute(0, 2, 3, 1))
-                    #                             + (inpainted_motion.permute(0, 2, 3, 1) * inpainting_mask.permute(0, 2, 3, 1)))
-                    #     # Do random projection again
-                    #     model_output = self.data_transform_fn(painted_model_output).permute(0, 3, 1, 2)
-
-                    # if self.log_trajectory_fn is not None:
-            if self.log_trajectory_fn is not None:  # to log or not to log # flag.GEN_LOG_TRAJ:
-                out_list = [
-                    990, 900, 800, 700, 600, 500, 400, 300, 200, 100, 10, 0
-                ]
-                if int(t[0]) in out_list:
-                    # self.log_trajectory_fn(out["pred_xstart"].detach(), model_kwargs['y']['log_name'], out_list, t, model_kwargs['y']['log_id'])
-                    self.log_trajectory_fn(sample.detach(),
-                                           model_kwargs['y']['log_name'],
-                                           out_list, t,
-                                           model_kwargs['y']['log_id'])
-
-            x = sample.detach()
-
-        # End inpainting
-        return {"sample": sample, "pred_xstart": out["pred_xstart"].detach()}
 
     def p_sample_loop(
         self,
@@ -1353,16 +1146,6 @@ class GaussianDiffusion:
         if dump_steps is not None:
             dump = []
 
-        # For checking input size for kps conditioning. Should be removed later.
-        from model.mdm_unet import MDM_UNET
-        if isinstance(model.model, MDM_UNET):
-            if self.conf.train_keypoint_mask == 'keypoints':
-                # NOTE: TODO: This is a hack to make it work with keypoints
-                # Remove this when use transformer model
-                shape = (shape[0], shape[1] - 3, shape[2], shape[3])
-            elif self.conf.train_keypoint_mask == 'keyposes':
-                shape = (shape[0], shape[1] - 68, shape[2], shape[3])
-
         for i, sample in enumerate(
                 self.p_sample_loop_progressive(
                     model,
@@ -1388,86 +1171,6 @@ class GaussianDiffusion:
             return dump
         return final["sample"]
 
-
-    def p_sample_loop_multi(
-        self,
-        model,
-        shape,
-        noise=None,
-        clip_denoised=True,
-        denoised_fn=None,
-        cond_fn=None,
-        model_kwargs=None,
-        device=None,
-        progress=False,
-        skip_timesteps=0,
-        init_image=None,
-        randomize_class=False,
-        cond_fn_with_grad=False,
-        dump_steps=None,
-        const_noise=False,
-        num_loop=1,
-    ):
-        """
-        Generate samples from the model.
-
-        :param model: the model module.
-        :param shape: the shape of the samples, (N, C, H, W).
-        :param noise: if specified, the noise from the encoder to sample.
-                      Should be of the same shape as `shape`.
-        :param clip_denoised: if True, clip x_start predictions to [-1, 1].
-        :param denoised_fn: if not None, a function which applies to the
-            x_start prediction before it is used to sample.
-        :param cond_fn: if not None, this is a gradient function that acts
-                        similarly to the model.
-        :param model_kwargs: if not None, a dict of extra keyword arguments to
-            pass to the model. This can be used for conditioning.
-        :param device: if specified, the device to create the samples on.
-                       If not specified, use a model parameter's device.
-        :param progress: if True, show a tqdm progress bar.
-        :param const_noise: If True, will noise all samples with the same noise throughout sampling
-        :return: a non-differentiable batch of samples.
-        """
-        final = None
-        if dump_steps is not None:
-            dump = []
-
-        if self.conf.train_keypoint_mask == 'keypoints':
-            # NOTE: TODO: This is a hack to make it work with 5 points
-            shape = (shape[0], shape[1] - 3, shape[2], shape[3])
-
-        for ll in range(num_loop):
-            print("loop: ", ll)
-            dump = []
-            for i, sample in enumerate(
-                    self.p_sample_loop_progressive(
-                        model,
-                        shape,
-                        noise=noise,
-                        clip_denoised=clip_denoised,
-                        denoised_fn=denoised_fn,
-                        cond_fn=cond_fn,
-                        model_kwargs=model_kwargs,
-                        device=device,
-                        progress=progress,
-                        skip_timesteps=skip_timesteps,
-                        init_image=init_image,
-                        randomize_class=randomize_class,
-                        cond_fn_with_grad=cond_fn_with_grad,
-                        const_noise=const_noise,
-                    )):
-                if dump_steps is not None and i in dump_steps:
-                    # dump.append(deepcopy(sample["sample"]))
-                    dump.append(deepcopy(sample["pred_xstart"]))
-                final = sample
-            init_image = final["pred_xstart"]
-            skip_timesteps = 600
-            # dump_steps = [0, 100, 200, 300, 400, 450, 499]
-            dump_steps = [0, 100, 200, 250, 300, 350, 399]
-            # dump_steps = [1, 100, 300, 500, 700, 850, 999]
-        if dump_steps is not None:
-            return dump
-        return final["sample"]
 
     def p_sample_loop_progressive(
         self,
@@ -1535,7 +1238,6 @@ class GaussianDiffusion:
                 cond_fn_with_grad = cond_fn is not None
                 cond_fn_with_grad = True  # NOTE: for eval debugging
                 sample_fn = self.p_sample_with_grad if cond_fn_with_grad else self.p_sample
-                # sample_fn = self.p_sample_with_grad_repeat if cond_fn_with_grad else self.p_sample
                 out = sample_fn(
                     model,
                     img,
@@ -1551,84 +1253,6 @@ class GaussianDiffusion:
                 img = out["sample"]
                 previous_xstart = out["pred_xstart"]
 
-    def ddim_sample_repeat_step(
-        self,
-        model,
-        x,
-        t,
-        clip_denoised=True,
-        denoised_fn=None,
-        cond_fn=None,
-        model_kwargs=None,
-        eta=0.0,
-        previous_xstart=None,
-    ):
-        """
-        Sample x_{t-1} from the model using DDIM.
-
-        Same usage as p_sample().
-
-        Repeat steap at t for k times.
-        """
-        k = 1
-        if int(t) >= 99:
-            k = 1
-        for ii in range(k):
-            out_orig = self.p_mean_variance(
-                model,
-                x,
-                t,
-                clip_denoised=clip_denoised,
-                denoised_fn=denoised_fn,
-                model_kwargs=model_kwargs,
-                previous_xstart=previous_xstart,
-            )
-            if cond_fn is not None:
-                out = self.condition_score(cond_fn,
-                                           out_orig,
-                                           x,
-                                           t,
-                                           model_kwargs=model_kwargs)
-            else:
-                out = out_orig
-            '''Here we will act as if the predited x_start is for step t (current step), 
-            instead of t-1 (next step)
-            '''
-            # Keep target step at t until the last loop
-            if ii == k - 1:
-                target_step = t
-            else:
-                target_step = t + 1
-
-            # Usually our model outputs epsilon, but we re-derive it
-            # in case we used x_start or x_prev prediction.
-            eps = self._predict_eps_from_xstart(
-                x, t, out["pred_xstart"])  # target_step
-
-            alpha_bar = _extract_into_tensor(self.alphas_cumprod, target_step,
-                                             x.shape)
-            alpha_bar_prev = _extract_into_tensor(self.alphas_cumprod_prev,
-                                                  target_step, x.shape)
-            sigma = (eta * th.sqrt((1 - alpha_bar_prev) / (1 - alpha_bar)) *
-                     th.sqrt(1 - alpha_bar / alpha_bar_prev))
-            # Equation 12.
-            noise = th.randn_like(x)
-            mean_pred = (out["pred_xstart"] * th.sqrt(alpha_bar_prev) +
-                         th.sqrt(1 - alpha_bar_prev - sigma**2) * eps)
-
-            nonzero_mask = (
-                (target_step != 0).float().view(-1,
-                                                *([1] * (len(x.shape) - 1)))
-            )  # no noise when t == 0
-            sample = mean_pred + nonzero_mask * sigma * noise
-            # model_mean, _, _ = self.q_posterior_mean_variance(
-            #         x_start=pred_xstart, x_t=x, t=t
-            #     )
-
-            # try adding condition mask here
-            x = sample.detach()
-
-        return {"sample": sample, "pred_xstart": out["pred_xstart"]}
 
     def ddim_sample(
         self,
@@ -1682,9 +1306,6 @@ class GaussianDiffusion:
         nonzero_mask = ((t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
                         )  # no noise when t == 0
         sample = mean_pred + nonzero_mask * sigma * noise
-        # model_mean, _, _ = self.q_posterior_mean_variance(
-        #         x_start=pred_xstart, x_t=x, t=t
-        #     )
 
         return {
             "sample": sample,
@@ -1819,22 +1440,6 @@ class GaussianDiffusion:
         if dump_steps is not None:
             dump = []
 
-        # For checking input size for kps conditioning. Should be removed later.
-        from model.mdm_unet import MDM_UNET
-        if isinstance(model.model, MDM_UNET):
-            if self.conf.train_keypoint_mask == 'keypoints':
-                # NOTE: TODO: This is a hack to make it work with keypoints
-                # Remove this when use transformer model
-                shape = (shape[0], shape[1] - 3, shape[2], shape[3])
-            elif self.conf.train_keypoint_mask == 'keyposes':
-                shape = (shape[0], shape[1] - 68, shape[2], shape[3])
-
-        # if self.conf.train_keypoint_mask == 'keypoints':
-        #     # NOTE: TODO: This is a hack to make it work with keypoints
-        #     shape = (shape[0], shape[1] - 3, shape[2], shape[3])
-        # elif self.conf.train_keypoint_mask == 'keyposes':
-        #     shape = (shape[0], shape[1] - 25, shape[2], shape[3])
-
         final = None
         for i, sample in enumerate(
                 self.ddim_sample_loop_progressive(
@@ -1923,8 +1528,6 @@ class GaussianDiffusion:
             with th.no_grad():
                 cond_fn_with_grad = True
                 sample_fn = self.ddim_sample_with_grad if cond_fn_with_grad else self.ddim_sample
-                ### Try ddim_sample with repeating step t for k times
-                # sample_fn = self.ddim_sample_with_grad if cond_fn_with_grad else self.ddim_sample_repeat_step
                 out = sample_fn(
                     model,
                     img,
@@ -2262,63 +1865,7 @@ class GaussianDiffusion:
             if self.loss_type == LossType.RESCALED_KL:
                 terms["loss"] *= self.num_timesteps
         elif self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
-            if 'keypoints' in self.conf.train_keypoint_mask:
-                # [bs, 4 or 263, 1, seqlen]
-                # sample N points
-                sample_ids = []
-                kps_masks = th.zeros(x_start.shape[0], 1, 1, x_start.shape[-1], device=x_start.device)
-                target_kps = th.zeros(x_start.shape[0], 2, 1, x_start.shape[-1], device=x_start.device)
-                # NOTE: use -3 as null because there are a lot of 0s in the data
-                # target_kps[:, :, :, :] = -3
-                for i in range(x_start.shape[0]):
-                    # Sample how many key points
-                    rand_value = np.random.uniform()
-                    # Has a 15% chance to use all as keypoints
-                    if rand_value < 0.15:
-                        sample_ids.append(th.arange(model_kwargs['y']['lengths'][i]))
-                    else:
-                        num_kps = int(th.randint(model_kwargs['y']['lengths'][i], [1])[0])
-                        sample_ids.append(th.randint(0, model_kwargs['y']['lengths'][i], (num_kps, )))
-                    kps_masks[i, 0, 0, sample_ids[-1]] = 1
-                    target_kps[i, 0, 0, sample_ids[-1]] = x_start[i, 1, 0, sample_ids[-1]]  # x
-                    target_kps[i, 1, 0, sample_ids[-1]] = x_start[i, 2, 0, sample_ids[-1]]  # y
-                
-                if self.conf.train_keypoint_mask == 'keypoints_better_cond':
-                    model_output = model(x_t, self._scale_timesteps(t), **model_kwargs, cond_val=target_kps, cond_mask=kps_masks)
-
-                elif self.conf.train_keypoint_mask == "keypoints":
-                    # Extend the dimentions by 3 (mask and target x and y)
-                    new_xt = th.cat([x_t, kps_masks, target_kps], dim=1)
-                    # [bs, (4 or 263) + 3, 1, seqlen]
-                    model_output = model(new_xt, self._scale_timesteps(t), **model_kwargs)
-
-            elif self.conf.train_keypoint_mask == "keyposes":
-                sample_ids = []
-                kps_masks = th.zeros(x_start.shape[0], 1, 1, x_start.shape[-1], device=x_start.device)
-                # NOTE: wrong number of keypoints. Have to be 4 + 21*3 = 67
-                target_cond = th.zeros(x_start.shape[0], 67, 1, x_start.shape[-1], device=x_start.device)
-                for i in range(x_start.shape[0]):
-                    # Sample how many key points
-                    rand_value = np.random.uniform()
-                    # Has a 15% chance to use all as keypoints
-                    # if rand_value < 0.05:
-                    #     sample_ids.append(th.arange(0))
-                    # elif rand_value < 0.15:
-                    if rand_value < 0.15:
-                        # num_kps = int(model_kwargs['y']['lengths'][i])
-                        sample_ids.append(th.arange(model_kwargs['y']['lengths'][i]))
-                    else:
-                        num_kps = int(th.randint(model_kwargs['y']['lengths'][i], [1])[0])
-                        sample_ids.append(th.randint(0, model_kwargs['y']['lengths'][i], (num_kps, )))
-                    kps_masks[i, 0, 0, sample_ids[-1]] = 1
-                    target_cond[i, :, 0, sample_ids[-1]] = x_start[i, :67, 0, sample_ids[-1]]
-                # sample_ids = th.stack(sample_ids, dim=0)
-                new_xt = th.cat([x_t, kps_masks, target_cond], dim=1)
-                # [bs, 263 + 1 + 4 + 63, 1, seqlen]
-                model_output = model(new_xt, self._scale_timesteps(t), **model_kwargs)
-
-            else:
-                model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
+            model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
 
             if isinstance(model_output, tuple):
                 # model has two heads
@@ -2380,9 +1927,6 @@ class GaussianDiffusion:
             time_weights = torch.ones(*target.shape,
                                        device=target.device,
                                        dtype=target.dtype)
-            # if self.conf.train_keypoint_mask == "keypoints":
-            #     # overweigh the loss for the sampled points
-            #     time_weights = time_weights + kps_masks * 1.0
 
             terms["rot_mse"] = self.masked_l2_weighted(
                 target, model_output, mask,
@@ -2508,38 +2052,6 @@ class GaussianDiffusion:
 
         l_ankle_idx, r_ankle_idx = 7, 8
         l_foot_idx, r_foot_idx = 10, 11
-        """ Contact calculated by 'Kfir Method' Commented code)"""
-        # contact_signal = torch.zeros((pose_xyz.shape[0], pose_xyz.shape[3], 2), device=pose_xyz.device) # [BatchSize, Frames, 2]
-        # left_xyz = 0.5 * (pose_xyz[:, l_ankle_idx, :, :] + pose_xyz[:, l_foot_idx, :, :]) # [BatchSize, 3, Frames]
-        # right_xyz = 0.5 * (pose_xyz[:, r_ankle_idx, :, :] + pose_xyz[:, r_foot_idx, :, :])
-        # left_z, right_z = left_xyz[:, 2, :], right_xyz[:, 2, :] # [BatchSize, Frames]
-        # left_velocity = torch.linalg.norm(left_xyz[:, :, 2:] - left_xyz[:, :, :-2], axis=1)  # [BatchSize, Frames]
-        # right_velocity = torch.linalg.norm(left_xyz[:, :, 2:] - left_xyz[:, :, :-2], axis=1)
-        #
-        # left_z_mask = left_z <= torch.mean(torch.sort(left_z)[0][:, :left_z.shape[1] // 5], axis=-1)
-        # left_z_mask = torch.stack([left_z_mask, left_z_mask], dim=-1) # [BatchSize, Frames, 2]
-        # left_z_mask[:, :, 1] = False  # Blank right side
-        # contact_signal[left_z_mask] = 0.4
-        #
-        # right_z_mask = right_z <= torch.mean(torch.sort(right_z)[0][:, :right_z.shape[1] // 5], axis=-1)
-        # right_z_mask = torch.stack([right_z_mask, right_z_mask], dim=-1) # [BatchSize, Frames, 2]
-        # right_z_mask[:, :, 0] = False  # Blank left side
-        # contact_signal[right_z_mask] = 0.4
-        # contact_signal[left_z <= (torch.mean(torch.sort(left_z)[:left_z.shape[0] // 5]) + 20), 0] = 1
-        # contact_signal[right_z <= (torch.mean(torch.sort(right_z)[:right_z.shape[0] // 5]) + 20), 1] = 1
-
-        # plt.plot(to_np_cpu(left_z[0]), label='left_z')
-        # plt.plot(to_np_cpu(left_velocity[0]), label='left_velocity')
-        # plt.plot(to_np_cpu(contact_signal[0, :, 0]), label='left_fc')
-        # plt.grid()
-        # plt.legend()
-        # plt.show()
-        # plt.plot(to_np_cpu(right_z[0]), label='right_z')
-        # plt.plot(to_np_cpu(right_velocity[0]), label='right_velocity')
-        # plt.plot(to_np_cpu(contact_signal[0, :, 1]), label='right_fc')
-        # plt.grid()
-        # plt.legend()
-        # plt.show()
 
         gt_joint_xyz = gt_xyz[:, [
             l_ankle_idx, l_foot_idx, r_ankle_idx, r_foot_idx
@@ -2557,153 +2069,11 @@ class GaussianDiffusion:
         pred_joint_vel[
             ~fc_mask] = 0  # Blank non-contact velocities frames. [BS,4,FRAMES]
         pred_joint_vel = torch.unsqueeze(pred_joint_vel, dim=2)
-        """DEBUG CODE"""
-        # print(f'mask: {mask.shape}')
-        # print(f'pred_joint_vel: {pred_joint_vel.shape}')
-        # plt.title(f'Joint: {joint_idx}')
-        # plt.plot(to_np_cpu(gt_joint_vel[0]), label='velocity')
-        # plt.plot(to_np_cpu(fc_mask[0]), label='fc')
-        # plt.grid()
-        # plt.legend()
-        # plt.show()
         return self.masked_l2(
             pred_joint_vel,
             torch.zeros(pred_joint_vel.shape, device=pred_joint_vel.device),
             mask[:, :, :, 1:])
 
-    # TODO - NOT USED YET, JUST COMMITING TO NOT DELETE THIS AND KEEP INITIAL IMPLEMENTATION, NOT DONE!
-    def foot_contact_loss_humanml3d(self, target, model_output):
-        # root_rot_velocity (B, seq_len, 1)
-        # root_linear_velocity (B, seq_len, 2)
-        # root_y (B, seq_len, 1)
-        # ric_data (B, seq_len, (joint_num - 1)*3) , XYZ
-        # rot_data (B, seq_len, (joint_num - 1)*6) , 6D
-        # local_velocity (B, seq_len, joint_num*3) , XYZ
-        # foot contact (B, seq_len, 4) ,
-
-        target_fc = target[:, -4:, :, :]
-        root_rot_velocity = target[:, :1, :, :]
-        root_linear_velocity = target[:, 1:3, :, :]
-        root_y = target[:, 3:4, :, :]
-        ric_data = target[:, 4:67, :, :]  # 4+(3*21)=67
-        rot_data = target[:, 67:193, :, :]  # 67+(6*21)=193
-        local_velocity = target[:, 193:259, :, :]  # 193+(3*22)=259
-        contact = target[:, 259:, :, :]  # 193+(3*22)=259
-        contact_mask_gt = contact > 0.5  # contact mask order for indexes are fid_l [7, 10], fid_r [8, 11]
-        vel_lf_7 = local_velocity[:, 7 * 3:8 * 3, :, :]
-        vel_rf_8 = local_velocity[:, 8 * 3:9 * 3, :, :]
-        vel_lf_10 = local_velocity[:, 10 * 3:11 * 3, :, :]
-        vel_rf_11 = local_velocity[:, 11 * 3:12 * 3, :, :]
-
-        calc_vel_lf_7 = ric_data[:, 6 * 3:7 * 3, :,
-                                 1:] - ric_data[:, 6 * 3:7 * 3, :, :-1]
-        calc_vel_rf_8 = ric_data[:, 7 * 3:8 * 3, :,
-                                 1:] - ric_data[:, 7 * 3:8 * 3, :, :-1]
-        calc_vel_lf_10 = ric_data[:, 9 * 3:10 * 3, :,
-                                  1:] - ric_data[:, 9 * 3:10 * 3, :, :-1]
-        calc_vel_rf_11 = ric_data[:, 10 * 3:11 * 3, :,
-                                  1:] - ric_data[:, 10 * 3:11 * 3, :, :-1]
-
-        # vel_foots = torch.stack([vel_lf_7, vel_lf_10, vel_rf_8, vel_rf_11], dim=1)
-        for chosen_vel_foot_calc, chosen_vel_foot, joint_idx, contact_mask_idx in zip(
-            [calc_vel_lf_7, calc_vel_rf_8, calc_vel_lf_10, calc_vel_rf_11],
-            [vel_lf_7, vel_lf_10, vel_rf_8, vel_rf_11], [7, 10, 8, 11],
-            [0, 1, 2, 3]):
-            tmp_mask_gt = contact_mask_gt[:,
-                                          contact_mask_idx, :, :].cpu().detach(
-                                          ).numpy().reshape(-1).astype(int)
-            chosen_vel_norm = np.linalg.norm(
-                chosen_vel_foot.cpu().detach().numpy().reshape((3, -1)),
-                axis=0)
-            chosen_vel_calc_norm = np.linalg.norm(
-                chosen_vel_foot_calc.cpu().detach().numpy().reshape((3, -1)),
-                axis=0)
-
-            print(tmp_mask_gt.shape)
-            print(chosen_vel_foot.shape)
-            print(chosen_vel_calc_norm.shape)
-            import matplotlib.pyplot as plt
-            plt.plot(tmp_mask_gt, label='FC mask')
-            plt.plot(chosen_vel_norm, label='Vel. XYZ norm (from vector)')
-            plt.plot(chosen_vel_calc_norm,
-                     label='Vel. XYZ norm (calculated diff XYZ)')
-
-            plt.title(f'FC idx {contact_mask_idx}, Joint Index {joint_idx}')
-            plt.legend()
-            plt.show()
-        # print(vel_foots.shape)
-        return 0
-
-    # TODO - NOT USED YET, JUST COMMITING TO NOT DELETE THIS AND KEEP INITIAL IMPLEMENTATION, NOT DONE!
-    def velocity_consistency_loss_humanml3d(self, target, model_output):
-        # root_rot_velocity (B, seq_len, 1)
-        # root_linear_velocity (B, seq_len, 2)
-        # root_y (B, seq_len, 1)
-        # ric_data (B, seq_len, (joint_num - 1)*3) , XYZ
-        # rot_data (B, seq_len, (joint_num - 1)*6) , 6D
-        # local_velocity (B, seq_len, joint_num*3) , XYZ
-        # foot contact (B, seq_len, 4) ,
-
-        target_fc = target[:, -4:, :, :]
-        root_rot_velocity = target[:, :1, :, :]
-        root_linear_velocity = target[:, 1:3, :, :]
-        root_y = target[:, 3:4, :, :]
-        ric_data = target[:, 4:67, :, :]  # 4+(3*21)=67
-        rot_data = target[:, 67:193, :, :]  # 67+(6*21)=193
-        local_velocity = target[:, 193:259, :, :]  # 193+(3*22)=259
-        contact = target[:, 259:, :, :]  # 193+(3*22)=259
-
-        calc_vel_from_xyz = ric_data[:, :, :, 1:] - ric_data[:, :, :, :-1]
-        velocity_from_vector = local_velocity[:, 3:, :, 1:]  # Slicing out root
-        r_rot_quat, r_pos = motion_process.recover_root_rot_pos(
-            target.permute(0, 2, 3, 1).type(th.FloatTensor))
-        print(f'r_rot_quat: {r_rot_quat.shape}')
-        print(f'calc_vel_from_xyz: {calc_vel_from_xyz.shape}')
-        calc_vel_from_xyz = calc_vel_from_xyz.permute(0, 2, 3, 1)
-        calc_vel_from_xyz = calc_vel_from_xyz.reshape(
-            (1, 1, -1, 21, 3)).type(th.FloatTensor)
-        r_rot_quat_adapted = r_rot_quat[..., :-1, None, :].repeat(
-            (1, 1, 1, 21, 1)).to(calc_vel_from_xyz.device)
-        print(
-            f'calc_vel_from_xyz: {calc_vel_from_xyz.shape} , {calc_vel_from_xyz.device}'
-        )
-        print(
-            f'r_rot_quat_adapted: {r_rot_quat_adapted.shape}, {r_rot_quat_adapted.device}'
-        )
-
-        calc_vel_from_xyz = motion_process.qrot(r_rot_quat_adapted,
-                                                calc_vel_from_xyz)
-        calc_vel_from_xyz = calc_vel_from_xyz.reshape((1, 1, -1, 21 * 3))
-        calc_vel_from_xyz = calc_vel_from_xyz.permute(0, 3, 1, 2)
-        print(
-            f'calc_vel_from_xyz: {calc_vel_from_xyz.shape} , {calc_vel_from_xyz.device}'
-        )
-
-        import matplotlib.pyplot as plt
-        for i in range(21):
-            plt.plot(np.linalg.norm(
-                calc_vel_from_xyz[:, i * 3:(i + 1) *
-                                  3, :, :].cpu().detach().numpy().reshape(
-                                      (3, -1)),
-                axis=0),
-                     label='Calc Vel')
-            plt.plot(np.linalg.norm(
-                velocity_from_vector[:, i * 3:(i + 1) *
-                                     3, :, :].cpu().detach().numpy().reshape(
-                                         (3, -1)),
-                axis=0),
-                     label='Vector Vel')
-            plt.title(f'Joint idx: {i}')
-            plt.legend()
-            plt.show()
-        print(calc_vel_from_xyz.shape)
-        print(velocity_from_vector.shape)
-        diff = calc_vel_from_xyz - velocity_from_vector
-        print(
-            np.linalg.norm(diff.cpu().detach().numpy().reshape((63, -1)),
-                           axis=0))
-
-        return 0
 
     def _prior_bpd(self, x_start):
         """
