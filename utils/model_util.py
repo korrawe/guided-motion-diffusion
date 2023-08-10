@@ -107,7 +107,6 @@ def get_model_args(args: FullModelOptions, data: DataLoader):
         'unet_out_mult': args.out_mult,
         'tf_out_mult': args.out_mult,
         'xz_only': args.xz_only,
-        'train_keypoint_mask': args.train_keypoint_mask,
     }
 
 
@@ -153,7 +152,6 @@ def create_gaussian_diffusion(args: FullModelOptions):
             traj_extra_weight=args.traj_extra_weight,
             time_weighted_loss=args.time_weighted_loss,
             train_x0_as_eps=args.train_x0_as_eps,
-            train_keypoint_mask=args.train_keypoint_mask,
         ),
     )
 
