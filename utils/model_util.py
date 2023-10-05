@@ -156,7 +156,7 @@ def create_gaussian_diffusion(args: FullModelOptions):
     )
 
 
-def load_saved_model(model, model_path, use_avg: bool=False):  # use_avg_model
+def load_saved_model(model, model_path, use_avg: bool=True):  # use_avg_model
     state_dict = torch.load(model_path, map_location='cpu')
     # Use average model when possible
     if use_avg and 'model_avg' in state_dict.keys():
