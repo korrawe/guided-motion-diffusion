@@ -442,11 +442,7 @@ if __name__ == '__main__':
     args.batch_size = 32 # This must be 32! Don't change it! otherwise it will cause a bug in R precision calc!
     args.num_frames = 196 # This must be 196!
     args.gen_two_stages = True
-    if args.train_keypoint_mask != "none":
-        args.gen_two_stages = False
-        skip_first_stage = True
-    else:
-        skip_first_stage = False
+    skip_first_stage = False
 
     if_ddim = "_ddim" if args.use_ddim else ""
     fixseed(args.seed)
