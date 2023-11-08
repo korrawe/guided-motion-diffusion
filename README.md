@@ -1,4 +1,4 @@
-# GMD: Human Motion Diffusion Model
+# GMD: Guided Motion Diffusion for Controllable Human Motion Synthesis
 
 [![arXiv](https://img.shields.io/badge/arXiv-<2305.12577>-<COLOR>.svg)](https://arxiv.org/abs/2305.12577)
 
@@ -12,11 +12,12 @@ Visit our [**project page**](https://korrawe.github.io/gmd-project/) for more de
 If you find this code useful in your research, please cite:
 
 ```
-@article{karunratanakul2023gmd,
+@inproceedings{karunratanakul2023gmd,
+  title     = {Guided Motion Diffusion for Controllable Human Motion Synthesis},
   author    = {Karunratanakul, Korrawe and Preechakul, Konpat and Suwajanakorn, Supasorn and Tang, Siyu},
-  title     = {GMD: Controllable Human Motion Synthesis via Guided Diffusion Models},
-  journal   = {arXiv preprint arXiv:2305.12577},
-  year      = {2023},
+  booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision},
+  pages     = {2151--2162},
+  year      = {2023}
 }
 ```
 
