@@ -4,11 +4,19 @@
 
 The official PyTorch implementation of the paper [**"GMD: Controllable Human Motion Synthesis via Guided Diffusion Models"**](https://arxiv.org/abs/2305.12577).
 
-Visit our [**project page**](https://korrawe.github.io/gmd-project/) for more details.
+For more details, visit our [**project page**](https://korrawe.github.io/gmd-project/).
 
 ![teaser](./assets/teaser.jpg)
 
-#### Bibtex
+## News
+
+📢 
+**20/Dec/23** - We release [DNO: Optimizing Diffusion Noise Can Serve As Universal Motion Priors](https://korrawe.github.io/dno-project/), a follow-up work that looks at how to effectively use diffusion model and guidance to tackle many motion tasks.
+\
+**28/July/23** - First release.
+
+
+### Bibtex
 If you find this code useful in your research, please cite:
 
 ```
@@ -21,9 +29,6 @@ If you find this code useful in your research, please cite:
 }
 ```
 
-## News
-
-📢 **28/July/23** - First release.
 
 
 ## Getting started
