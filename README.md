@@ -133,9 +133,9 @@ Download both models, then unzip and place them in `./save/`.
 
 Both models are trained on the HumanML3D dataset.
 
-[trajectory model](https://polybox.ethz.ch/index.php/s/vQWmohE6dNP3uny)
+[trajectory model](https://drive.google.com/file/d/1vlXUjzX1FSNmiqUBxBWenwrW1MZh-Iej/view?usp=sharing)
 
-[motion model](https://polybox.ethz.ch/index.php/s/D63LEliIBmtpvdd)
+[motion model](https://drive.google.com/file/d/1KKG2aAioMfq_-m9bPNmFXK9XOWnBbdPZ/view?usp=sharing)
 
 
 
